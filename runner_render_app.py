@@ -1,12 +1,15 @@
 import csv
 import os
 import requests
+import time
+import datetime
+import psutil
 from faker import Faker
 from main import APTACertificateData
 
 fake = Faker()
 
-# ✅ Folder to save PDF downloads and CSV reports
+# ✅ Output folders
 pdf_output_dir = "rendered_apta_pdfs"
 os.makedirs(pdf_output_dir, exist_ok=True)
 
@@ -35,6 +38,9 @@ def get_evaluation(parameter):
 
 # 🔁 Generate 50 requests
 for i in range(1, 51):
+    # 🕒 Start timer
+    start_time = time.time()
+
     dummy_data = APTACertificateData(
         reference_no=f"APTA-REF-{fake.random_number(digits=4)}",
         issued_in=fake.city(),
@@ -59,31 +65,38 @@ for i in range(1, 51):
     # 🌐 Call Render API
     response = requests.post(RENDER_URL, json=dummy_data.dict())
 
-    # 📥 Save PDF if successful
+    # 📥 Save PDF with unique timestamp
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    pdf_filename = os.path.join(pdf_output_dir, f"apta_certificate_{i}_{timestamp}.pdf")
+
     if response.status_code == 200:
-        pdf_filename = os.path.join(pdf_output_dir, f"apta_certificate_{i}.pdf")
         with open(pdf_filename, "wb") as pdf_file:
             pdf_file.write(response.content)
     else:
         print(f"❌ Failed to generate PDF {i}: {response.status_code}")
         continue
 
-    # 📊 Save CSV with dummy + evaluation
+    # 📊 Save CSV
     csv_filename = os.path.join(csv_output_dir, f"apta_report_{i}.csv")
     with open(csv_filename, "w", newline='', encoding="utf-8") as file:
         writer = csv.writer(file)
-
-        # Section 1: Dummy Data
         writer.writerow(["🔹 Dummy Input Field", "Value"])
         for field, value in dummy_data.dict().items():
             writer.writerow([field, value])
 
         writer.writerow([])
-
-        # Section 2: Evaluation
         writer.writerow(["✅ Test Parameter", "Rating (1–5)", "Remarks"])
         for param in test_parameters:
             score, remark = get_evaluation(param)
             writer.writerow([param, score, remark])
 
-print("✅ All 50 PDFs and CSVs generated from Render API.")
+    # 🧠 Print system stats
+    cpu = psutil.cpu_percent()
+    mem = psutil.virtual_memory().percent
+    elapsed = round(time.time() - start_time, 2)
+
+    print(f"✅ [{i}/50] PDF: {pdf_filename}")
+    print(f"   CPU Usage: {cpu}% | Memory Usage: {mem}% | Time Taken: {elapsed}s")
+    print("--------------------------------------------------")
+
+print("🎉 All 50 PDFs and CSVs generated using Render API.")
